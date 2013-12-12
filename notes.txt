@@ -1,0 +1,182 @@
+
+###
+### Build Raw Data & Single Node Index
+
+$ ./gen-random-text-docs-csv.pl 1000000 7 200 300 10w200 100w500 > million_random_docs.csv
+
+# start solr
+
+$ curl "http://localhost:8983/solr/update?commit=true&header=false&fieldnames=id,small_i,medium_i,large_i,author,content" --data-binary @- -H 'Content-type:text/csv; charset=utf-8' < million_random_docs.csv
+
+# stop solr
+
+###
+### Test A: 
+### Single Node
+### 785127 results
+### "text:(1 2 3 23 78 111 222 333)" "score desc"
+
+# start solr ... wait for firstSearcher warm up.
+
+$ perl classic_deep_paging.pl "text:(1 2 3 23 78 111 222 333)" "score desc" > data/a_classic_data.1 2> data/a_classic_docs.1
+$ perl classic_deep_paging.pl "text:(1 2 3 23 78 111 222 333)" "score desc" > data/a_classic_data.2 2> data/a_classic_docs.2
+$ perl classic_deep_paging.pl "text:(1 2 3 23 78 111 222 333)" "score desc" > data/a_classic_data.3 2> data/a_classic_docs.3
+
+# stop solr
+
+# start solr ... wait for firstSearcher warm up.
+
+$ perl cursor_deep_paging.pl "text:(1 2 3 23 78 111 222 333)" "score desc" > data/a_cursor_data.1 2> data/a_cursor_docs.1
+$ perl cursor_deep_paging.pl "text:(1 2 3 23 78 111 222 333)" "score desc" > data/a_cursor_data.2 2> data/a_cursor_docs.2
+$ perl cursor_deep_paging.pl "text:(1 2 3 23 78 111 222 333)" "score desc" > data/a_cursor_data.3 2> data/a_cursor_docs.3
+
+# stop solr
+
+## diff docs...
+
+$ diff a_classic_docs.1 a_classic_docs.2
+$ diff a_classic_docs.1 a_classic_docs.3
+
+$ diff a_cursor_docs.1 a_cursor_docs.2
+$ diff a_cursor_docs.1 a_cursor_docs.3
+
+## tie breaker in cursor sort makes direct comparison impossible
+## but we can still compare list of docs returned and scores...
+
+$ sort a_cursor_docs.1 > a_cursor_docs.sort
+$ sort a_classic_docs.1 > a_classic_docs.sort
+$ diff a_classic_docs.sort a_cursor_docs.sort
+
+## generate stats...
+
+$ join data/a_classic_data.1 data/a_classic_data.2 > data/tmp
+$ join data/a_classic_data.3 data/tmp > data/a_classic_data.all
+$ perl crunch-stats.pl < data/a_classic_data.all > data/a_classic_stats
+
+$ join data/a_cursor_data.1 data/a_cursor_data.2 > data/tmp
+$ join data/a_cursor_data.3 data/tmp > data/a_cursor_data.all
+$ perl crunch-stats.pl < data/a_cursor_data.all > data/a_cursor_stats
+
+
+###
+### Test B
+### Single Node
+### 608273 results
+### "text:(1 2 3)" "author_s desc, small_i asc, medium_i desc, large_i asc, score asc"
+
+# start solr ... wait for firstSearcher warm up.
+
+$ perl classic_deep_paging.pl "text:(1 2 3)" "author_s desc, small_i asc, medium_i desc, large_i asc, score asc" > data/b_classic_data.1 2> data/b_classic_docs.1
+$ perl classic_deep_paging.pl "text:(1 2 3)" "author_s desc, small_i asc, medium_i desc, large_i asc, score asc" > data/b_classic_data.2 2> data/b_classic_docs.2
+$ perl classic_deep_paging.pl "text:(1 2 3)" "author_s desc, small_i asc, medium_i desc, large_i asc, score asc" > data/b_classic_data.3 2> data/b_classic_docs.3
+
+# stop solr
+
+# start solr ... wait for firstSearcher warm up.
+
+$ perl cursor_deep_paging.pl "text:(1 2 3)" "author_s desc, small_i asc, medium_i desc, large_i asc, score asc" > data/b_cursor_data.1 2> data/b_cursor_docs.1
+$ perl cursor_deep_paging.pl "text:(1 2 3)" "author_s desc, small_i asc, medium_i desc, large_i asc, score asc" > data/b_cursor_data.2 2> data/b_cursor_docs.2
+$ perl cursor_deep_paging.pl "text:(1 2 3)" "author_s desc, small_i asc, medium_i desc, large_i asc, score asc" > data/b_cursor_data.3 2> data/b_cursor_docs.3
+
+# stop solr
+
+## diff docs...
+
+$ diff b_classic_docs.1 b_classic_docs.2
+$ diff b_classic_docs.1 b_classic_docs.3
+
+$ diff b_cursor_docs.1 b_cursor_docs.2
+$ diff b_cursor_docs.1 b_cursor_docs.3
+
+## tie breaker in cursor sort makes direct comparison impossible
+## but we can still compare list of docs returned and scores...
+
+$ sort b_cursor_docs.1 > b_cursor_docs.sorted
+$ sort b_classic_docs.1 > b_classic_docs.sorted
+$ diff b_classic_docs.sorted b_cursor_docs.sorted
+
+## generate stats...
+
+$ join data/b_classic_data.1 data/b_classic_data.2 > data/tmp 
+$ join data/b_classic_data.3 data/tmp > data/b_classic_data.all
+$ perl crunch-stats.pl < data/b_classic_data.all > data/b_classic_stats
+
+$ join data/b_cursor_data.1 data/b_cursor_data.2 > data/tmp 
+$ join data/b_cursor_data.3 data/tmp > data/b_cursor_data.all
+$ perl crunch-stats.pl < data/b_cursor_data.all > data/b_cursor_stats
+
+###
+### Setup 2 node, 2 shard SolrCloud index.
+
+# https://wiki.apache.org/solr/SolrCloud
+
+cp -r example example2
+
+# in parallel windows...
+
+$ cd example && java -Dbootstrap_confdir=./solr/collection1/conf -Dcollection.configName=myconf -DzkRun -DnumShards=2 -jar start.jar
+$ cd example2 && java -Djetty.port=7574 -DzkHost=localhost:9983 -jar start.jar
+$ curl "http://localhost:8983/solr/update?commit=true&header=false&fieldnames=id,small_i,medium_i,large_i,author,content" --data-binary @- -H 'Content-type:text/csv; charset=utf-8' < million_random_docs.csv
+
+# stop both solr instances
+
+###
+### Test C
+### 2 Node, 2 Shard
+### 155355 results
+### "text:(+1 +5)" "score desc"
+
+# start both solr nodes...
+
+$ cd example && java -DzkRun -DnumShards=2 -jar start.jar
+$ cd example2 && java -Djetty.port=7574 -DzkHost=localhost:9983 -jar start.jar
+
+# ...wait for firstSearcher warm up.
+
+$ perl classic_deep_paging.pl "text:(+1 +5)" "score desc" > data/c_classic_data.1 2> data/c_classic_docs.1
+$ perl classic_deep_paging.pl "text:(+1 +5)" "score desc" > data/c_classic_data.2 2> data/c_classic_docs.2
+$ perl classic_deep_paging.pl "text:(+1 +5)" "score desc" > data/c_classic_data.3 2> data/c_classic_docs.3
+
+# stop both solr nodes
+
+# start both solr nodes...
+
+$ cd example && java -DzkRun -DnumShards=2 -jar start.jar
+$ cd example2 && java -Djetty.port=7574 -DzkHost=localhost:9983 -jar start.jar
+
+# ...wait for firstSearcher warm up.
+
+$ perl cursor_deep_paging.pl "text:(+1 +5)" "score desc" > data/c_cursor_data.1 2> data/c_cursor_docs.1
+$ perl cursor_deep_paging.pl "text:(+1 +5)" "score desc" > data/c_cursor_data.2 2> data/c_cursor_docs.2
+$ perl cursor_deep_paging.pl "text:(+1 +5)" "score desc" > data/c_cursor_data.3 2> data/c_cursor_docs.3
+
+# stop both solr nodes
+
+## diff docs...
+
+$ diff c_cursor_docs.1 c_cursor_docs.2
+$ diff c_cursor_docs.1 c_cursor_docs.3
+$ diff c_classic_docs.1 c_classic_docs.2
+$ diff c_classic_docs.1 c_classic_docs.3
+
+## tie breaker in cursor sort makes direct comparison impossible
+## but we can still compare list of docs returned and scores...
+
+$ sort c_classic_docs.1 > c_classic_docs.sorted
+$ sort c_cursor_docs.1 > c_cursor_docs.sorted
+$ diff c_cursor_docs.sorted c_classic_docs.sorted
+
+## generate stats...
+
+$ join data/c_classic_data.1 data/c_classic_data.2 > data/tmp
+$ join data/c_classic_data.3 data/tmp > data/c_classic_data.all
+$ perl crunch-stats.pl < data/c_classic_data.all > data/c_classic_stats
+
+$ join data/c_cursor_data.1 data/c_cursor_data.2 > data/tmp
+$ join data/c_cursor_data.3 data/tmp > data/c_cursor_data.all
+$ perl crunch-stats.pl < data/c_cursor_data.all > data/c_cursor_stats
+
+###
+### Build All The Graphs
+
+$ gnuplot paging.stats_compare.gnuplot 
