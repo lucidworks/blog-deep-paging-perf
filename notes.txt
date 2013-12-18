@@ -180,3 +180,86 @@ $ perl crunch-stats.pl < data/c_cursor_data.all > data/c_cursor_stats
 ### Build All The Graphs
 
 $ gnuplot paging.stats_compare.gnuplot 
+
+########################################################################################
+########################################################################################
+########################################################################################
+########################################################################################
+
+###
+### Run tests A, B, and C, against using updated cursor patch...
+### https://issues.apache.org/jira/secure/attachment/12619201/SOLR-5463.patch
+###
+
+### Test A redux
+
+# start solr ... wait for firstSearcher warm up.
+
+$ perl cursor_deep_paging.pl "text:(1 2 3 23 78 111 222 333)" "score desc" > data/a_cursorX_data.1 2> data/a_cursorX_docs.1
+$ perl cursor_deep_paging.pl "text:(1 2 3 23 78 111 222 333)" "score desc" > data/a_cursorX_data.2 2> data/a_cursorX_docs.2
+$ perl cursor_deep_paging.pl "text:(1 2 3 23 78 111 222 333)" "score desc" > data/a_cursorX_data.3 2> data/a_cursorX_docs.3
+
+# stop solr
+
+### diff docs 
+
+$ diff data/a_cursorX_docs.1 data/a_cursorX_docs.2
+$ diff data/a_cursorX_docs.1 data/a_cursorX_docs.3
+
+## generate stats...
+
+$ join data/a_cursorX_data.1 data/a_cursorX_data.2 > data/tmp
+$ join data/a_cursorX_data.3 data/tmp > data/a_cursorX_data.all
+$ perl crunch-stats.pl < data/a_cursorX_data.all > data/a_cursorX_stats
+
+### Test B redux
+
+# start solr ... wait for firstSearcher warm up.
+
+$ perl cursor_deep_paging.pl "text:(1 2 3)" "author_s desc, small_i asc, medium_i desc, large_i asc, score asc" > data/b_cursorX_data.1 2> data/b_cursorX_docs.1
+$ perl cursor_deep_paging.pl "text:(1 2 3)" "author_s desc, small_i asc, medium_i desc, large_i asc, score asc" > data/b_cursorX_data.2 2> data/b_cursorX_docs.2
+$ perl cursor_deep_paging.pl "text:(1 2 3)" "author_s desc, small_i asc, medium_i desc, large_i asc, score asc" > data/b_cursorX_data.3 2> data/b_cursorX_docs.3
+
+# stop solr
+
+### diff docs 
+
+$ diff data/b_cursorX_docs.1 data/b_cursorX_docs.2
+$ diff data/b_cursorX_docs.1 data/b_cursorX_docs.3
+
+## generate stats...
+
+$ join data/b_cursorX_data.1 data/b_cursorX_data.2 > data/tmp
+$ join data/b_cursorX_data.3 data/tmp > data/b_cursorX_data.all
+$ perl crunch-stats.pl < data/b_cursorX_data.all > data/b_cursorX_stats
+
+### Test C redux
+
+# start both solr nodes...
+
+$ cd example && java -DzkRun -DnumShards=2 -jar start.jar
+$ cd example2 && java -Djetty.port=7574 -DzkHost=localhost:9983 -jar start.jar
+
+# ...wait for firstSearcher warm up.
+
+$ perl cursor_deep_paging.pl "text:(+1 +5)" "score desc" > data/c_cursorX_data.1 2> data/c_cursorX_docs.1
+$ perl cursor_deep_paging.pl "text:(+1 +5)" "score desc" > data/c_cursorX_data.2 2> data/c_cursorX_docs.2
+$ perl cursor_deep_paging.pl "text:(+1 +5)" "score desc" > data/c_cursorX_data.3 2> data/c_cursorX_docs.3
+
+# stop both solr nodes
+
+### diff docs 
+
+$ diff data/c_cursorX_docs.1 data/c_cursorX_docs.2
+$ diff data/c_cursorX_docs.1 data/c_cursorX_docs.3
+
+## generate stats...
+
+$ join data/c_cursorX_data.1 data/c_cursorX_data.2 > data/tmp
+$ join data/c_cursorX_data.3 data/tmp > data/c_cursorX_data.all
+$ perl crunch-stats.pl < data/c_cursorX_data.all > data/c_cursorX_stats
+
+###
+### Re-Build All The Graphs
+
+$ gnuplot paging.stats_compare.gnuplot 

@@ -14,11 +14,10 @@ my $q = shift || die "you must specify a q param";
 my $sort = shift || die "you must specify a sort param";
 
 my $rows = 1000; # assume non trivial page size for deep paging
-my $uri = URI->new('http://localhost:8983/solr/collection1/deep');
+my $uri = URI->new('http://localhost:8983/solr/collection1/select');
 
 # baseline params & prime the field caches
 my $params = {
-    'shards.qt' => '/deep',
     'fl' => 'id,score',
     'wt' => 'json',
     'start' => 0,
@@ -33,7 +32,7 @@ get($uri) || die "field cache warming query failed";
 # prep for deep walk
 $params->{'rows'} = $rows;
 $params->{'q'} = $q;
-$params->{'searchAfter'} = '*';
+$params->{'cursorMark'} = '*';
 
 my $docsOnPage = 0;
 my $page = 0;
@@ -48,7 +47,7 @@ do {
     for (@{$data->{'response'}->{'docs'}}) {
 	print STDERR $_->{'id'}, ,"\t", $_->{'score'}, "\n";
     }
-    $params->{'searchAfter'} = $data->{'nextSearchAfter'};
+    $params->{'cursorMark'} = $data->{'nextCursorMark'};
     $docsOnPage = scalar(@{$data->{'response'}->{'docs'}});
     print STDOUT $page++, "\t", tv_interval($timer_start, $timer_end), "\n";
 } while ($docsOnPage == $rows);
